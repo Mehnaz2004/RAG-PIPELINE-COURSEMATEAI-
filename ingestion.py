@@ -1,7 +1,15 @@
+#INGESTION TEST CODES
+#curl.exe -X POST "http://127.0.0.1:8000/documents/upload" -F "user_id=user_A" -F "files=@C:\Users\mehna\OneDrive\Desktop\Small_project\2026\CourseMateAI\documents\Python.pdf"
+
+
+
 import os
 import shutil
 import uuid
 
+import chromadb
+
+from dotenv import load_dotenv
 from fastapi import UploadFile, HTTPException
 from pypdf import PdfReader
 
@@ -15,8 +23,13 @@ from langchain_huggingface import HuggingFaceEmbeddings
 # Configuration
 # -----------------------------
 
-CHROMA_PATH = "chroma_db"
+load_dotenv()
+
 TEMP_UPLOAD_PATH = "temp_uploads"
+
+CHROMA_API_KEY = os.getenv("CHROMA_API_KEY")
+CHROMA_TENANT = os.getenv("CHROMA_TENANT")
+CHROMA_DATABASE = os.getenv("CHROMA_DATABASE")
 
 os.makedirs(TEMP_UPLOAD_PATH, exist_ok=True)
 
@@ -31,11 +44,23 @@ embedding_model = HuggingFaceEmbeddings(
 
 
 # -----------------------------
-# Load persistent Chroma DB
+# Connect to Chroma Cloud
+# -----------------------------
+
+chroma_client = chromadb.CloudClient(
+    api_key=CHROMA_API_KEY,
+    tenant=CHROMA_TENANT,
+    database=CHROMA_DATABASE
+)
+
+
+# -----------------------------
+# Connect LangChain to Chroma
 # -----------------------------
 
 vectorstore = Chroma(
-    persist_directory=CHROMA_PATH,
+    client=chroma_client,
+    collection_name="studylens_documents",
     embedding_function=embedding_model
 )
 
@@ -45,8 +70,8 @@ vectorstore = Chroma(
 # -----------------------------
 
 text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000,
-    chunk_overlap=200
+    chunk_size=2500,
+    chunk_overlap=300
 )
 
 
@@ -59,17 +84,14 @@ async def ingest_pdf(
     user_id: str
 ):
 
-    # Validate file type
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
             detail=f"{file.filename} is not a valid PDF"
         )
 
-    # Generate unique ID for this uploaded document
     document_id = str(uuid.uuid4())
 
-    # Collision-safe temporary filename
     temp_filename = f"{document_id}_{file.filename}"
 
     temp_path = os.path.join(
@@ -79,10 +101,7 @@ async def ingest_pdf(
 
     try:
 
-        # -----------------------------
         # Save uploaded PDF temporarily
-        # -----------------------------
-
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(
                 file.file,
@@ -90,25 +109,17 @@ async def ingest_pdf(
             )
 
 
-        # -----------------------------
-        # Read PDF using pypdf
-        # -----------------------------
-
+        # Read PDF
         reader = PdfReader(temp_path)
 
         documents = []
 
 
-        # -----------------------------
-        # Convert each page into a
-        # LangChain Document
-        # -----------------------------
-
+        # Convert pages into LangChain Documents
         for page_number, page in enumerate(reader.pages):
 
             page_text = page.extract_text()
 
-            # Skip pages with no extractable text
             if not page_text or not page_text.strip():
                 continue
 
@@ -125,7 +136,6 @@ async def ingest_pdf(
             documents.append(document)
 
 
-        # Ensure usable text was extracted
         if not documents:
             raise HTTPException(
                 status_code=400,
@@ -133,44 +143,33 @@ async def ingest_pdf(
             )
 
 
-        # -----------------------------
         # Split pages into chunks
-        # -----------------------------
-
         chunks = text_splitter.split_documents(
             documents
         )
 
 
-        # -----------------------------
         # Debug: print one chunk
-        # -----------------------------
-
         if chunks:
             print("\n" + "=" * 50)
             print("DEBUG: SAMPLE CHUNK")
             print("=" * 50)
+
             print("\nCONTENT:\n")
             print(chunks[0].page_content[:500])
 
             print("\nMETADATA:\n")
             print(chunks[0].metadata)
+
             print("=" * 50 + "\n")
 
 
-        # -----------------------------
-        # Store chunks in persistent
-        # local Chroma database
-        # -----------------------------
-
+        # Store chunks in Chroma Cloud
+        # LangChain uses YOUR embedding model
         vectorstore.add_documents(
             documents=chunks
         )
 
-
-        # -----------------------------
-        # Return successful ingestion
-        # -----------------------------
 
         return {
             "document_id": document_id,
@@ -192,14 +191,10 @@ async def ingest_pdf(
 
     finally:
 
-        # -----------------------------
-        # Delete temporary file
-        # -----------------------------
-
         if os.path.exists(temp_path):
             os.remove(temp_path)
-            
-            
+
+
 # -----------------------------
 # Debug: test user-based retrieval
 # -----------------------------
@@ -208,6 +203,7 @@ def test_user_retrieval(
     query: str,
     user_id: str
 ):
+
     results = vectorstore.similarity_search(
         query=query,
         k=5,
@@ -224,6 +220,7 @@ def test_user_retrieval(
         print("\nNO DOCUMENTS FOUND FOR THIS USER.\n")
 
     for index, document in enumerate(results, start=1):
+
         print(f"\nRESULT {index}")
 
         print("\nCONTENT:\n")

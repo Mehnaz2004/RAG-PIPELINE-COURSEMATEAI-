@@ -1,3 +1,6 @@
+#start server: uv run uvicorn app:app --reload
+
+
 from typing import List
 
 from fastapi import FastAPI, UploadFile, File, Form

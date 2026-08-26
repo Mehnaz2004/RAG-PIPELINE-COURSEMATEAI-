@@ -6,7 +6,7 @@
 import os
 import shutil
 import uuid
-
+import traceback
 import chromadb
 
 from dotenv import load_dotenv
@@ -70,7 +70,7 @@ vectorstore = Chroma(
 # -----------------------------
 
 text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=2500,
+    chunk_size=2700,
     chunk_overlap=300
 )
 
@@ -182,6 +182,13 @@ async def ingest_pdf(
 
 
     except Exception as e:
+        print("\n" + "=" * 50)
+        print("INGESTION ERROR:")
+        print("=" * 50)
+
+        traceback.print_exc()
+
+        print("=" * 50 + "\n")
 
         raise HTTPException(
             status_code=500,

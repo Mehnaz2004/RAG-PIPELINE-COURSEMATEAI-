@@ -1,7 +1,11 @@
 #INGESTION TEST CODES
 #curl.exe -X POST "http://127.0.0.1:8000/documents/upload" -F "user_id=user_A" -F "files=@C:\Users\mehna\OneDrive\Desktop\Small_project\2026\CourseMateAI\documents\Python.pdf"
 
+#list documents for user_A
+#curl.exe "http://127.0.0.1:8000/documents/user_A"
 
+#delete documents from user_A
+#curl.exe -X DELETE "http://127.0.0.1:8000/documents/user_A/YOUR_DOCUMENT_ID"
 
 import os
 import shutil

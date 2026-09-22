@@ -111,22 +111,14 @@ async def ingest_pdf(
                 file.file,
                 buffer
             )
-
-
         # Read PDF
         reader = PdfReader(temp_path)
-
         documents = []
-
-
         # Convert pages into LangChain Documents
         for page_number, page in enumerate(reader.pages):
-
             page_text = page.extract_text()
-
             if not page_text or not page_text.strip():
                 continue
-
             document = Document(
                 page_content=page_text,
                 metadata={
@@ -136,7 +128,6 @@ async def ingest_pdf(
                     "page": page_number + 1
                 }
             )
-
             documents.append(document)
 
 
